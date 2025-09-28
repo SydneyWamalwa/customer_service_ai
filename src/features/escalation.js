@@ -1,19 +1,22 @@
 /**
  * Human escalation feature for the multi-tenant customer support agent
- * Handles routing complex queries to human agents
+ * Handles routing complex queries to human agents and approval workflows
  */
 
 /**
- * Manages escalation to human agents
+ * Manages escalation to human agents and approval processes
  */
-class EscalationManager {
+export class EscalationManager {
   /**
    * Creates a new EscalationManager instance
    * @param {object} companyConfig - Company configuration
+   * @param {object} env - Environment variables and bindings
    */
-  constructor(companyConfig) {
+  constructor(companyConfig, env) {
     this.companyConfig = companyConfig;
+    this.env = env;
     this.escalatedSessions = new Map(); // Map of sessionId to escalation status
+    this.pendingApprovals = new Map(); // Map of approvalId to approval request
   }
   
   /**
@@ -48,6 +51,11 @@ class EscalationManager {
       return true;
     }
     
+    // Check if this is a high-risk action that requires approval
+    if (this.requiresApproval(query, context)) {
+      return true;
+    }
+    
     // Check for repeated failed attempts
     if (context && context.sessionHistory) {
       const recentMessages = context.sessionHistory.slice(-6);
@@ -65,6 +73,133 @@ class EscalationManager {
     }
     
     return false;
+  }
+  
+  /**
+   * Determines if a query requires human approval before proceeding
+   * @param {string} query - The user query
+   * @param {object} context - Additional context
+   * @returns {boolean} - Whether approval is required
+   */
+  requiresApproval(query, context) {
+    // Check for high-risk actions that require approval
+    const highRiskKeywords = [
+      'delete account', 'cancel subscription', 'refund', 'payment dispute',
+      'change password', 'update billing', 'remove data', 'gdpr'
+    ];
+    
+    const hasHighRiskKeyword = highRiskKeywords.some(keyword => 
+      query.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (hasHighRiskKeyword) {
+      return true;
+    }
+    
+    // Check company-specific approval rules if configured
+    if (this.companyConfig.approvalRules && this.companyConfig.approvalRules.length > 0) {
+      for (const rule of this.companyConfig.approvalRules) {
+        if (new RegExp(rule.pattern, 'i').test(query)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Create an approval request for an action
+   * @param {string} action - The action requiring approval
+   * @param {object} context - Context information
+   * @param {string} userId - The user ID
+   * @param {string} sessionId - The session ID
+   * @returns {object} - The approval request
+   */
+  async createApprovalRequest(action, context, userId, sessionId) {
+    const approvalId = crypto.randomUUID();
+    
+    const approvalRequest = {
+      id: approvalId,
+      action,
+      context,
+      userId,
+      sessionId,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Store in pending approvals map
+    this.pendingApprovals.set(approvalId, approvalRequest);
+    
+    // If configured, send notification to approval channel
+    if (this.companyConfig.approvalNotificationUrl) {
+      try {
+        await fetch(this.companyConfig.approvalNotificationUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Company-ID': this.companyConfig.id
+          },
+          body: JSON.stringify({
+            type: 'approval_request',
+            data: approvalRequest
+          })
+        });
+      } catch (error) {
+        console.error('Failed to send approval notification:', error);
+      }
+    }
+    
+    return approvalRequest;
+  }
+  
+  /**
+   * Process an approval decision
+   * @param {string} approvalId - The approval request ID
+   * @param {boolean} approved - Whether the request is approved
+   * @param {string} approverNotes - Notes from the approver
+   * @param {string} approverId - ID of the approver
+   * @returns {object} - The updated approval request
+   */
+  async processApprovalDecision(approvalId, approved, approverNotes, approverId) {
+    // Get the approval request
+    const approvalRequest = this.pendingApprovals.get(approvalId);
+    
+    if (!approvalRequest) {
+      throw new Error(`Approval request ${approvalId} not found`);
+    }
+    
+    // Update the approval request
+    approvalRequest.status = approved ? 'approved' : 'rejected';
+    approvalRequest.approverNotes = approverNotes;
+    approvalRequest.approverId = approverId;
+    approvalRequest.updatedAt = new Date().toISOString();
+    
+    // Store the updated request
+    this.pendingApprovals.set(approvalId, approvalRequest);
+    
+    return approvalRequest;
+  }
+  
+  /**
+   * Check the status of an approval request
+   * @param {string} approvalId - The approval request ID
+   * @returns {object} - The approval request status
+   */
+  getApprovalStatus(approvalId) {
+    const approvalRequest = this.pendingApprovals.get(approvalId);
+    
+    if (!approvalRequest) {
+      return { error: 'Approval request not found' };
+    }
+    
+    return {
+      id: approvalRequest.id,
+      status: approvalRequest.status,
+      updatedAt: approvalRequest.updatedAt
+    };
   }
   
   /**
@@ -198,7 +333,3 @@ class EscalationManager {
     return resolvedRecord;
   }
 }
-
-module.exports = {
-  EscalationManager
-};

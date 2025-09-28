@@ -2,6 +2,10 @@
  * SupportAgent - Core agent class for multi-tenant customer support
  * Handles message processing, tool invocation, and context management
  */
+import { VectorManager } from '../memory/vectorManager';
+import { FAQManager } from '../features/faqManager';
+import { TicketResolver } from '../features/ticketResolver';
+import { EscalationManager } from '../features/escalation';
 export class SupportAgent {
   constructor({ env, companyConfig, userId, sessionId }) {
     this.env = env;
@@ -83,6 +87,86 @@ export class SupportAgent {
     const historyResp = await sessionObject.fetch(historyReq);
     const history = await historyResp.json();
     
+    // Initialize components
+    const vectorManager = new VectorManager(this.env);
+    const faqManager = new FAQManager(this.env, vectorManager);
+    const ticketResolver = new TicketResolver(this.env, vectorManager, this.toolRegistry);
+    const escalationManager = new EscalationManager(this.companyConfig, this.env);
+    
+    // Check if this is a support ticket that needs resolution
+    const isTicket = this.isTicketRequest(message, history);
+    
+    // Check if this requires escalation or approval
+    const needsEscalation = escalationManager.shouldEscalate(message, { sessionHistory: history });
+    
+    // Recall previous similar customer interactions
+    const previousInteractions = await vectorManager.recallCustomerInteractions(
+      this.userId,
+      message,
+      this.companyConfig.id,
+      3
+    );
+    
+    // Process as a ticket if needed
+    let ticketAnalysis = null;
+    let ticketResolution = null;
+    if (isTicket) {
+      const ticket = {
+        id: crypto.randomUUID(),
+        customerId: this.userId,
+        description: message,
+        priority: this.determinePriority(message)
+      };
+      
+      // Analyze the ticket
+      ticketAnalysis = await ticketResolver.analyzeTicket(ticket, this.companyConfig.id);
+      
+      // Check for similar past resolutions
+      const similarResolutions = await ticketResolver.findSimilarResolutions(ticket, this.companyConfig.id);
+      
+      // If we have a similar resolution with high confidence, use it
+      if (similarResolutions.length > 0 && similarResolutions[0].similarity > 0.85) {
+        ticketResolution = {
+          ticketId: ticket.id,
+          status: 'resolved',
+          message: `Based on a similar past issue, I can help you with this: ${similarResolutions[0].resolution}`,
+          fromPastResolution: true,
+          similarTicketId: similarResolutions[0].ticketId
+        };
+      } 
+      // Otherwise, if it requires approval, create an approval request
+      else if (ticketAnalysis.requiresApproval) {
+        const approvalRequest = await escalationManager.createApprovalRequest(
+          'ticket_resolution',
+          { ticket, analysis: ticketAnalysis },
+          this.userId,
+          this.sessionId
+        );
+        
+        ticketResolution = {
+          ticketId: ticket.id,
+          status: 'pending_approval',
+          approvalId: approvalRequest.id,
+          message: "This request requires approval from our team. We'll get back to you shortly."
+        };
+      } 
+      // Otherwise, resolve the ticket automatically
+      else {
+        ticketResolution = await ticketResolver.resolveTicket(
+          ticket,
+          ticketAnalysis,
+          true, // Auto-approved
+          this.companyConfig.id
+        );
+      }
+    }
+    
+    // Try to answer from FAQs if not a ticket or if ticket needs approval
+    let faqResponse = null;
+    if (!isTicket || (ticketResolution && ticketResolution.status === 'pending_approval')) {
+      faqResponse = await faqManager.reasonWithFAQs(message, this.companyConfig.id);
+    }
+    
     // Retrieve relevant knowledge from vector database
     const relevantKnowledge = await this.retrieveRelevantKnowledge(message);
     
@@ -95,8 +179,14 @@ export class SupportAgent {
       toolResults = await this.executeTools(detectedTools, message);
     }
     
-    // Generate dynamic system prompt
-    const systemPrompt = this.generateSystemPrompt(relevantKnowledge, toolResults);
+    // Generate dynamic system prompt with all available context
+    const systemPrompt = this.generateEnhancedSystemPrompt(
+      relevantKnowledge, 
+      toolResults,
+      previousInteractions,
+      faqResponse,
+      ticketResolution
+    );
     
     // Prepare messages for AI model
     const messages = [
@@ -123,12 +213,39 @@ export class SupportAgent {
     
     await sessionObject.fetch(storeResponseReq);
     
-    // Return the final response
-    return {
+    // Store the interaction in memory for future reference
+    await vectorManager.storeInteraction(
+      this.userId,
+      message,
+      response.response,
+      {
+        actions: toolResults,
+        resolution: ticketResolution ? ticketResolution.message : null
+      },
+      this.companyConfig.id
+    );
+    
+    // Prepare the response object with additional context
+    const responseObject = {
       message: response.response,
       sessionId: this.sessionId,
       toolsUsed: Object.keys(toolResults)
     };
+    
+    // Add ticket information if this was processed as a ticket
+    if (ticketResolution) {
+      responseObject.ticket = {
+        id: ticketResolution.ticketId,
+        status: ticketResolution.status
+      };
+      
+      // If this requires approval, include the approval ID
+      if (ticketResolution.status === 'pending_approval' && ticketResolution.approvalId) {
+        responseObject.ticket.approvalId = ticketResolution.approvalId;
+      }
+    }
+    
+    return responseObject;
   }
 
   /**
@@ -225,9 +342,84 @@ export class SupportAgent {
   }
 
   /**
-   * Generate a dynamic system prompt based on company config and context
+   * Determine if a message is a support ticket request
+   * @param {string} message - The user message
+   * @param {Array} history - Conversation history
+   * @returns {boolean} - Whether this is a ticket request
    */
-  generateSystemPrompt(relevantKnowledge, toolResults) {
+  isTicketRequest(message, history) {
+    // Check for explicit ticket keywords
+    const ticketKeywords = [
+      'ticket', 'issue', 'problem', 'bug', 'error', 'not working',
+      'broken', 'fix', 'help me with', 'support request'
+    ];
+    
+    const hasTicketKeyword = ticketKeywords.some(keyword => 
+      message.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    // If it has a ticket keyword, it's likely a ticket
+    if (hasTicketKeyword) {
+      return true;
+    }
+    
+    // Check message length - longer messages are more likely to be tickets
+    if (message.length > 100) {
+      return true;
+    }
+    
+    // Check if this is a follow-up to a previous ticket
+    if (history && history.length > 1) {
+      const previousMessages = history.slice(-3); // Get last 3 messages
+      for (const msg of previousMessages) {
+        if (msg.role === 'assistant' && 
+            (msg.content.includes('ticket') || msg.content.includes('issue'))) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Determine priority of a ticket based on content
+   * @param {string} message - The ticket message
+   * @returns {string} - Priority level
+   */
+  determinePriority(message) {
+    const urgentKeywords = ['urgent', 'emergency', 'critical', 'immediately', 'asap'];
+    const highKeywords = ['important', 'high priority', 'serious', 'significant'];
+    
+    const lowercaseMessage = message.toLowerCase();
+    
+    if (urgentKeywords.some(keyword => lowercaseMessage.includes(keyword))) {
+      return 'urgent';
+    }
+    
+    if (highKeywords.some(keyword => lowercaseMessage.includes(keyword))) {
+      return 'high';
+    }
+    
+    return 'normal';
+  }
+
+  /**
+   * Generate enhanced system prompt with all available context
+   * @param {Array} relevantKnowledge - Relevant knowledge from vector database
+   * @param {Object} toolResults - Results from tool executions
+   * @param {Array} previousInteractions - Previous similar customer interactions
+   * @param {Object} faqResponse - Response from FAQ reasoning
+   * @param {Object} ticketResolution - Ticket resolution information
+   * @returns {string} - The enhanced system prompt
+   */
+  generateEnhancedSystemPrompt(
+    relevantKnowledge, 
+    toolResults, 
+    previousInteractions, 
+    faqResponse, 
+    ticketResolution
+  ) {
     const { agentName, branding, tone, greeting } = this.companyConfig;
     
     let prompt = `You are ${agentName}, a customer support agent for ${branding.companyName}. 
@@ -240,20 +432,68 @@ export class SupportAgent {
     
     `;
     
+    // Add ticket resolution information if available
+    if (ticketResolution) {
+      prompt += '\n\n=== TICKET RESOLUTION ===\n';
+      prompt += `Status: ${ticketResolution.status}\n`;
+      
+      if (ticketResolution.fromPastResolution) {
+        prompt += 'This issue was resolved based on a similar past ticket.\n';
+      }
+      
+      if (ticketResolution.status === 'pending_approval') {
+        prompt += 'This ticket requires approval before resolution. Please inform the user.\n';
+      }
+      
+      if (ticketResolution.message) {
+        prompt += `Resolution Message: ${ticketResolution.message}\n`;
+      }
+      
+      if (ticketResolution.actions) {
+        prompt += `Actions Taken: ${JSON.stringify(ticketResolution.actions)}\n`;
+      }
+    }
+    
+    // Add FAQ response if available
+    if (faqResponse && faqResponse.hasRelevantInfo) {
+      prompt += '\n\n=== FAQ INFORMATION ===\n';
+      prompt += `${faqResponse.reasoning}\n`;
+      
+      if (faqResponse.relevantFAQs && faqResponse.relevantFAQs.length > 0) {
+        prompt += 'Relevant FAQs:\n';
+        faqResponse.relevantFAQs.forEach((faq, index) => {
+          prompt += `[${index + 1}] Q: ${faq.question}\nA: ${faq.answer}\n\n`;
+        });
+      }
+    }
+    
+    // Add previous similar interactions if available
+    if (previousInteractions && previousInteractions.length > 0) {
+      prompt += '\n\n=== PREVIOUS SIMILAR INTERACTIONS ===\n';
+      prompt += 'This customer has asked similar questions before. Here are the previous interactions:\n';
+      
+      previousInteractions.forEach((interaction, index) => {
+        prompt += `[${index + 1}] Previous Query: ${interaction.query}\n`;
+        prompt += `Previous Response: ${interaction.response}\n`;
+        if (interaction.actions && Object.keys(interaction.actions).length > 0) {
+          prompt += `Actions Taken: ${JSON.stringify(interaction.actions)}\n`;
+        }
+        prompt += `Similarity Score: ${interaction.similarity.toFixed(2)}\n\n`;
+      });
+    }
+    
     // Add relevant knowledge if available
     if (relevantKnowledge && relevantKnowledge.trim()) {
-      prompt += `\n\nHere is some relevant information that might help with the response:\n${relevantKnowledge}\n\n`;
+      prompt += `\n\n=== RELEVANT KNOWLEDGE ===\n${relevantKnowledge}\n\n`;
     }
     
     // Add tool results if available
     if (Object.keys(toolResults).length > 0) {
-      prompt += `\n\nI've gathered the following information from our systems:\n`;
+      prompt += `\n\n=== TOOL RESULTS ===\n`;
       
       for (const [toolName, result] of Object.entries(toolResults)) {
         prompt += `\n- ${toolName}: ${JSON.stringify(result)}\n`;
       }
-      
-      prompt += `\nPlease use this information in your response as appropriate.\n`;
     }
     
     return prompt;

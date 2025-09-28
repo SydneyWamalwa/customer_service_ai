@@ -12,23 +12,48 @@
     <div class="login-container" id="login-container">
       <div class="login-box">
         <h1>AI Support Agent</h1>
-        <div class="company-selector">
-          <label for="company-select">Select Company:</label>
-          <select id="company-select">
-            <option value="company-1">TechCorp</option>
-            <option value="company-2">FriendlyShop</option>
-          </select>
+        <div class="login-tabs">
+          <button class="tab-btn active" id="customer-tab">Customer</button>
+          <button class="tab-btn" id="agent-tab">Company Agent</button>
         </div>
-        <div class="form-group">
-          <label for="email">Email:</label>
-          <input type="email" id="email" placeholder="Enter your email">
+        <div id="customer-login" class="login-tab-content active">
+          <div class="company-selector">
+            <label for="company-select">Select Company:</label>
+            <select id="company-select">
+              <option value="company-1">TechCorp</option>
+              <option value="company-2">FriendlyShop</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" placeholder="Enter your email">
+          </div>
+          <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter your password">
+          </div>
+          <button id="login-btn" class="primary-btn">Login</button>
+          <p class="demo-note">For demo: any email/password will work</p>
         </div>
-        <div class="form-group">
-          <label for="password">Password:</label>
-          <input type="password" id="password" placeholder="Enter your password">
+        <div id="agent-login" class="login-tab-content">
+          <div class="company-selector">
+            <label for="agent-company-select">Select Company:</label>
+            <select id="agent-company-select">
+              <option value="company-1">TechCorp</option>
+              <option value="company-2">FriendlyShop</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="agent-email">Agent Email:</label>
+            <input type="email" id="agent-email" placeholder="Enter your agent email">
+          </div>
+          <div class="form-group">
+            <label for="agent-password">Password:</label>
+            <input type="password" id="agent-password" placeholder="Enter your password">
+          </div>
+          <button id="agent-login-btn" class="primary-btn">Login as Agent</button>
+          <p class="demo-note">For demo: any email/password will work</p>
         </div>
-        <button id="login-btn" class="primary-btn">Login</button>
-        <p class="demo-note">For demo: any email/password will work</p>
       </div>
     </div>
 
@@ -51,11 +76,20 @@
             <span class="icon">⚙️</span>
             <span>Settings</span>
           </button>
+          <button class="menu-item agent-only hidden" data-view="approvals">
+            <span class="icon">✅</span>
+            <span>Approvals</span>
+          </button>
+          <button class="menu-item agent-only hidden" data-view="faq-training">
+            <span class="icon">🧠</span>
+            <span>FAQ Training</span>
+          </button>
         </div>
         <div class="user-info">
           <div class="user-avatar">👤</div>
           <div class="user-details">
             <div id="user-name">User Name</div>
+            <div id="user-role" class="user-role hidden">Agent</div>
             <button id="logout-btn" class="text-btn">Logout</button>
           </div>
         </div>
@@ -118,6 +152,55 @@
               </div>
             </div>
             <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+          </div>
+        </div>
+        
+        <div id="approvals-view" class="view-container agent-only hidden">
+          <h2>Pending Approvals</h2>
+          <div class="approval-filters">
+            <button class="filter-btn active" data-filter="pending">Pending</button>
+            <button class="filter-btn" data-filter="approved">Approved</button>
+            <button class="filter-btn" data-filter="rejected">Rejected</button>
+          </div>
+          <div id="approvals-list" class="approvals-list">
+            <!-- Approval requests will be loaded here -->
+            <div class="no-approvals">No pending approval requests</div>
+          </div>
+        </div>
+        
+        <div id="faq-training-view" class="view-container agent-only hidden">
+          <h2>FAQ Training</h2>
+          <div class="faq-training-container">
+            <div class="faq-form">
+              <h3>Add New FAQ</h3>
+              <div class="form-group">
+                <label for="faq-question">Question:</label>
+                <input type="text" id="faq-question" placeholder="Enter FAQ question">
+              </div>
+              <div class="form-group">
+                <label for="faq-answer">Answer:</label>
+                <textarea id="faq-answer" placeholder="Enter detailed answer"></textarea>
+              </div>
+              <div class="form-group">
+                <label for="faq-category">Category:</label>
+                <select id="faq-category">
+                  <option value="general">General</option>
+                  <option value="product">Product</option>
+                  <option value="billing">Billing</option>
+                  <option value="technical">Technical</option>
+                </select>
+              </div>
+              <button id="add-faq-btn" class="primary-btn">Add to Knowledge Base</button>
+            </div>
+            <div class="faq-list-container">
+              <h3>Existing FAQs</h3>
+              <div class="faq-search">
+                <input type="text" id="faq-search" placeholder="Search FAQs...">
+              </div>
+              <div id="faq-list" class="faq-list">
+                <!-- FAQs will be loaded here -->
+              </div>
+            </div>
           </div>
         </div>
       </div>
