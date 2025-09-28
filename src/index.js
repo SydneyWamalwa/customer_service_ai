@@ -11,7 +11,6 @@ import { ChatSessionDO } from './durable_objects/chatSession.js';
 const app = new Hono();
 export { ChatSessionDO };
 
-
 // Apply CORS middleware
 app.use('*', cors({
   origin: '*', // In production, restrict this to your domains
@@ -21,12 +20,23 @@ app.use('*', cors({
   maxAge: 600,
 }));
 
-// Serve static files from the public directory
-app.use('/static/*', serveStatic({ root: './public' }));
+// Serve static files - this will serve files from your public directory
+app.use('/*', serveStatic());
 
-// Serve the main UI
+// Serve the main UI - this should now work correctly
 app.get('/', (c) => {
-  return c.redirect('/public/index.html', 302);
+  // Since static files are served from root with the [site] config,
+  // the index.html should be accessible directly
+  return c.redirect('/index.html', 302);
+});
+
+// Add a health check endpoint
+app.get('/health', (c) => {
+  return c.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    service: 'Customer Service AI'
+  });
 });
 
 // Company-specific routes with middleware
