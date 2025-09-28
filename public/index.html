@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Support Agent</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div class="login-container" id="login-container">
+      <div class="login-box">
+        <h1>AI Support Agent</h1>
+        <div class="company-selector">
+          <label for="company-select">Select Company:</label>
+          <select id="company-select">
+            <option value="company-1">TechCorp</option>
+            <option value="company-2">FriendlyShop</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="email">Email:</label>
+          <input type="email" id="email" placeholder="Enter your email">
+        </div>
+        <div class="form-group">
+          <label for="password">Password:</label>
+          <input type="password" id="password" placeholder="Enter your password">
+        </div>
+        <button id="login-btn" class="primary-btn">Login</button>
+        <p class="demo-note">For demo: any email/password will work</p>
+      </div>
+    </div>
+
+    <div class="chat-container hidden" id="chat-container">
+      <div class="chat-sidebar">
+        <div class="company-info">
+          <div id="company-logo" class="company-logo"></div>
+          <h2 id="company-name">Company Name</h2>
+        </div>
+        <div class="sidebar-menu">
+          <button class="menu-item active" data-view="chat">
+            <span class="icon">💬</span>
+            <span>Chat</span>
+          </button>
+          <button class="menu-item" data-view="tickets">
+            <span class="icon">🎫</span>
+            <span>Tickets</span>
+          </button>
+          <button class="menu-item" data-view="settings">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+          </button>
+        </div>
+        <div class="user-info">
+          <div class="user-avatar">👤</div>
+          <div class="user-details">
+            <div id="user-name">User Name</div>
+            <button id="logout-btn" class="text-btn">Logout</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <div id="chat-view" class="view-container active">
+          <div class="chat-header">
+            <h2>Chat with <span id="agent-name">Support Agent</span></h2>
+          </div>
+          <div class="chat-messages" id="chat-messages">
+            <!-- Messages will be added here dynamically -->
+          </div>
+          <div class="chat-input-container">
+            <textarea id="chat-input" placeholder="Type your message here..." rows="2"></textarea>
+            <button id="send-btn" class="send-btn">Send</button>
+          </div>
+        </div>
+
+        <div id="tickets-view" class="view-container">
+          <div class="tickets-header">
+            <h2>Support Tickets</h2>
+            <button class="primary-btn" id="new-ticket-btn">New Ticket</button>
+          </div>
+          <div class="tickets-list" id="tickets-list">
+            <div class="empty-state">
+              <p>No tickets found</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="settings-view" class="view-container">
+          <div class="settings-header">
+            <h2>Settings</h2>
+          </div>
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="language-select">Language:</label>
+              <select id="language-select">
+                <option value="en">English</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="theme-select">Theme:</label>
+              <select id="theme-select">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="system">System Default</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Notifications:</label>
+              <div class="toggle-container">
+                <input type="checkbox" id="notifications-toggle" class="toggle-input">
+                <label for="notifications-toggle" class="toggle-label"></label>
+                <span>Enable notifications</span>
+              </div>
+            </div>
+            <button id="save-settings-btn" class="primary-btn">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Widget (Floating) -->
+    <div id="chat-widget" class="chat-widget hidden">
+      <div class="chat-widget-header">
+        <div id="widget-company-logo" class="widget-company-logo"></div>
+        <h3 id="widget-agent-name">Support Agent</h3>
+        <button id="widget-close-btn" class="widget-close-btn">×</button>
+      </div>
+      <div class="widget-messages" id="widget-messages">
+        <!-- Widget messages will be added here dynamically -->
+      </div>
+      <div class="widget-input-container">
+        <textarea id="widget-input" placeholder="Type your message here..." rows="1"></textarea>
+        <button id="widget-send-btn" class="widget-send-btn">Send</button>
+      </div>
+    </div>
+    <button id="widget-toggle-btn" class="widget-toggle-btn">
+      <span class="widget-toggle-icon">💬</span>
+    </button>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

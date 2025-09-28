@@ -1,0 +1,24 @@
+name = "cloudflare-ai-support-agent"
+main = "src/index.js"
+compatibility_date = "2023-12-01"
+
+[site]
+bucket = "./public"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "support-agent-index"
+
+[[durable_objects.bindings]]
+name = "CHAT_SESSIONS"
+class_name = "ChatSessionDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatSessionDO"]
+
+[vars]
+JWT_SECRET = "replace-with-your-secret-in-production"
