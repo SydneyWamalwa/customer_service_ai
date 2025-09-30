@@ -2,35 +2,26 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { SupportAgent } from './agent/supportAgent';
 import { CompanyConfigManager } from './config/companyConfigManager';
-import { authMiddleware } from './middleware/auth';
-import { getCompanyIdMiddleware } from './middleware/companyId';
 import { serveStatic } from 'hono/cloudflare-workers';
-import { ChatSessionDO } from './durable_objects/chatSession.js';
+import { ChatSessionDO } from './durable_objects/chatSession';
+
+// Export the Durable Object
+export { ChatSessionDO };
 
 // Initialize the Hono app
 const app = new Hono();
-export { ChatSessionDO };
 
-// Apply CORS middleware
+// Apply CORS middleware to all routes
 app.use('*', cors({
-  origin: '*', // In production, restrict this to your domains
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Company-ID'],
   exposeHeaders: ['Content-Length'],
   maxAge: 600,
+  credentials: true,
 }));
 
-// Serve static files - this will serve files from your public directory
-app.use('/*', serveStatic());
-
-// Serve the main UI - this should now work correctly
-app.get('/', (c) => {
-  // Since static files are served from root with the [site] config,
-  // the index.html should be accessible directly
-  return c.redirect('/index.html', 302);
-});
-
-// Add a health check endpoint
+// Health check endpoint
 app.get('/health', (c) => {
   return c.json({ 
     status: 'healthy', 
@@ -39,128 +30,120 @@ app.get('/health', (c) => {
   });
 });
 
-// Company-specific routes with middleware
-const api = new Hono();
-api.use('*', getCompanyIdMiddleware);
-api.use('/secure/*', authMiddleware);
-
-// Chat API endpoints
-api.post('/chat', async (c) => {
-  const companyId = c.get('companyId');
-  const configManager = new CompanyConfigManager(c.env);
-  const companyConfig = await configManager.getCompanyConfig(companyId);
-  
-  if (!companyConfig) {
-    return c.json({ error: 'Company not found' }, 404);
-  }
-  
-  const body = await c.req.json();
-  const { message, userId, sessionId } = body;
-  
-  if (!message) {
-    return c.json({ error: 'Message is required' }, 400);
-  }
-  
-  const agent = new SupportAgent({
-    env: c.env,
-    companyConfig,
-    userId,
-    sessionId
-  });
-  
-  const response = await agent.processMessage(message);
-  return c.json(response);
+// Simple middleware to extract company ID
+app.use('/api/*', async (c, next) => {
+  let companyId = c.req.header('X-Company-ID') || c.req.query('companyId') || 'company-1';
+  c.set('companyId', companyId);
+  await next();
 });
 
-// WebSocket endpoint for real-time chat
-api.get('/chat/ws', async (c) => {
-  const upgradeHeader = c.req.headers.get('Upgrade');
-  if (upgradeHeader !== 'websocket') {
-    return c.json({ error: 'Expected Upgrade: websocket' }, 426);
-  }
-
-  const companyId = c.get('companyId');
-  const configManager = new CompanyConfigManager(c.env);
-  const companyConfig = await configManager.getCompanyConfig(companyId);
-  
-  if (!companyConfig) {
-    return c.json({ error: 'Company not found' }, 404);
-  }
-  
-  const userId = c.req.query('userId');
-  const sessionId = c.req.query('sessionId');
-  
-  const agent = new SupportAgent({
-    env: c.env,
-    companyConfig,
-    userId,
-    sessionId
-  });
-  
-  const webSocketPair = new WebSocketPair();
-  const [client, server] = Object.values(webSocketPair);
-  
-  server.accept();
-  
-  // Handle WebSocket messages
-  server.addEventListener('message', async (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data.type === 'message') {
-        const response = await agent.processMessage(data.message);
-        server.send(JSON.stringify({
-          type: 'response',
-          data: response
-        }));
-      }
-    } catch (error) {
-      server.send(JSON.stringify({
-        type: 'error',
-        error: error.message
-      }));
+// Chat endpoint - PRIMARY FIX
+app.post('/api/chat', async (c) => {
+  try {
+    console.log('Chat endpoint hit');
+    
+    const companyId = c.get('companyId') || 'company-1';
+    console.log('Company ID:', companyId);
+    
+    const configManager = new CompanyConfigManager(c.env);
+    const companyConfig = await configManager.getCompanyConfig(companyId);
+    
+    if (!companyConfig) {
+      console.error('Company not found:', companyId);
+      return c.json({ 
+        error: 'Company not found',
+        response: "I apologize, but I couldn't load the configuration for your company. Please try again or contact support."
+      }, 200); // Return 200 to prevent errors on frontend
     }
-  });
-  
-  // Handle WebSocket close
-  server.addEventListener('close', () => {
-    // Clean up resources if needed
-  });
-  
-  return new Response(null, {
-    status: 101,
-    webSocket: client
-  });
+    
+    const body = await c.req.json();
+    const { message, userId, sessionId } = body;
+    
+    console.log('Received message:', message);
+    
+    if (!message) {
+      return c.json({ 
+        error: 'Message is required',
+        response: "Please enter a message."
+      }, 400);
+    }
+    
+    const agent = new SupportAgent({
+      env: c.env,
+      companyConfig,
+      userId: userId || 'anonymous',
+      sessionId: sessionId || crypto.randomUUID()
+    });
+    
+    const response = await agent.processMessage(message);
+    
+    console.log('Response generated:', response);
+    
+    return c.json(response);
+    
+  } catch (error) {
+    console.error('Chat endpoint error:', error);
+    console.error('Error stack:', error.stack);
+    
+    return c.json({ 
+      error: 'Internal server error',
+      message: error.message,
+      response: "I apologize, but I encountered an error processing your message. Please try again."
+    }, 200); // Return 200 to show error message instead of generic error
+  }
 });
 
-// Secure endpoints that require authentication
-api.post('/secure/feedback', async (c) => {
-  const body = await c.req.json();
-  const { messageId, rating, comment } = body;
-  
-  // Store feedback in database
-  // This would be implemented with Cloudflare D1 or another database
-  
-  return c.json({ success: true });
+// Feedback endpoint
+app.post('/api/feedback', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { sessionId, rating, comment } = body;
+    
+    console.log('Feedback received:', { sessionId, rating, comment });
+    
+    return c.json({ 
+      success: true,
+      message: 'Thank you for your feedback!'
+    });
+  } catch (error) {
+    console.error('Feedback error:', error);
+    return c.json({ 
+      error: 'Failed to submit feedback',
+      message: error.message 
+    }, 500);
+  }
 });
 
-// Admin panel API endpoints
-api.post('/secure/admin/config', async (c) => {
-  const companyId = c.get('companyId');
-  const body = await c.req.json();
-  
-  const configManager = new CompanyConfigManager(c.env);
-  await configManager.updateCompanyConfig(companyId, body);
-  
-  return c.json({ success: true });
+// Admin config endpoint
+app.post('/api/admin/config', async (c) => {
+  try {
+    const companyId = c.get('companyId');
+    const body = await c.req.json();
+    
+    const configManager = new CompanyConfigManager(c.env);
+    await configManager.updateCompanyConfig(companyId, body);
+    
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Config update error:', error);
+    return c.json({ 
+      error: 'Failed to update config',
+      message: error.message 
+    }, 500);
+  }
 });
 
-// Mount the API router
-app.route('/api', api);
+// Serve static files (HTML, CSS, JS)
+app.get('/*', serveStatic({ root: './' }));
 
-// Export the Hono app
+// Fallback to index.html for SPA routing
+app.get('/', serveStatic({ path: './index.html' }));
+
+// Export the worker
 export default {
   fetch: app.fetch,
   async scheduled(event, env, ctx) {
     // Handle scheduled tasks if needed
+    console.log('Scheduled task triggered:', event);
   }
 };

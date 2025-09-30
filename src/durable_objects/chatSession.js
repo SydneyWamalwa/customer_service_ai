@@ -10,21 +10,31 @@ export class ChatSessionDO {
   }
 
   async fetch(request) {
-    const url = new URL(request.url);
-    const path = url.pathname.split('/').pop();
+    try {
+      const url = new URL(request.url);
+      const path = url.pathname.split('/').pop();
 
-    // Handle different operations based on the path
-    switch (path) {
-      case 'store':
-        return await this.handleStoreMessage(request);
-      case 'history':
-        return await this.handleGetHistory(request);
-      case 'metadata':
-        return await this.handleGetMetadata(request);
-      case 'update-metadata':
-        return await this.handleUpdateMetadata(request);
-      default:
-        return new Response('Not found', { status: 404 });
+      // Handle different operations based on the path
+      switch (path) {
+        case 'store':
+          return await this.handleStoreMessage(request);
+        case 'history':
+          return await this.handleGetHistory(request);
+        case 'metadata':
+          return await this.handleGetMetadata(request);
+        case 'update-metadata':
+          return await this.handleUpdateMetadata(request);
+        case 'clear':
+          return await this.handleClearHistory(request);
+        default:
+          return new Response('Not found', { status: 404 });
+      }
+    } catch (error) {
+      console.error('ChatSessionDO error:', error);
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
   }
 
@@ -38,13 +48,14 @@ export class ChatSessionDO {
     // Add the new message with an ID
     const messageWithId = {
       ...message,
-      id: crypto.randomUUID()
+      id: crypto.randomUUID(),
+      timestamp: message.timestamp || new Date().toISOString()
     };
     
     // Add to history and store
     history.push(messageWithId);
     
-    // Limit history size to prevent excessive storage
+    // Limit history size to prevent excessive storage (keep last 100 messages)
     if (history.length > 100) {
       history = history.slice(-100);
     }
@@ -54,7 +65,10 @@ export class ChatSessionDO {
     // Update last activity timestamp
     await this.storage.put('lastActivity', new Date().toISOString());
     
-    return new Response(JSON.stringify({ success: true, messageId: messageWithId.id }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      messageId: messageWithId.id 
+    }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -115,6 +129,16 @@ export class ChatSessionDO {
     };
     
     await this.storage.put('metadata', updatedMetadata);
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Clear conversation history
+  async handleClearHistory(request) {
+    await this.storage.put('history', []);
+    await this.storage.put('lastActivity', new Date().toISOString());
     
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' }
