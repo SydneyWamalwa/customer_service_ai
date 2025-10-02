@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Service AI Widget Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      color: #667eea;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      color: #555;
+    }
+
+    p {
+      margin-bottom: 15px;
+      color: #666;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin: 20px 0;
+    }
+
+    .feature-list li {
+      padding: 10px 0;
+      padding-left: 30px;
+      position: relative;
+    }
+
+    .feature-list li:before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+
+    .code-block {
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      overflow-x: auto;
+    }
+
+    code {
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      color: #d63384;
+    }
+
+    .cta {
+      background: #667eea;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: background 0.3s;
+    }
+
+    .cta:hover {
+      background: #5568d3;
+    }
+
+    .note {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+
+    .note strong {
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Customer Service AI Widget</h1>
+    <p>Welcome to the Customer Service AI Widget demo! This page demonstrates how easy it is to integrate our AI-powered customer support into your website.</p>
+
+    <h2>Features</h2>
+    <ul class="feature-list">
+      <li>AI-powered responses using company-specific knowledge</li>
+      <li>Customizable branding (colors, logo, agent name)</li>
+      <li>Anonymous and authenticated customer support</li>
+      <li>Seamless escalation to human agents</li>
+      <li>Mobile-responsive design</li>
+      <li>Easy integration with just a few lines of code</li>
+    </ul>
+
+    <h2>How to Integrate</h2>
+    <p>Add the following code snippet to your website before the closing <code>&lt;/body&gt;</code> tag:</p>
+
+    <div class="code-block">
+      <code>
+&lt;script&gt;<br>
+&nbsp;&nbsp;window.customerAIConfig = {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;companyId: 'YOUR_COMPANY_ID',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;apiUrl: 'https://your-worker-url.workers.dev',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;user: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id: 'USER_ID',&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;// Optional<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name: 'USER_NAME',&nbsp;&nbsp;// Optional<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;email: 'USER_EMAIL'&nbsp;// Optional<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;};<br>
+&lt;/script&gt;<br>
+&lt;script src="https://your-worker-url.workers.dev/widget.js" async&gt;&lt;/script&gt;
+      </code>
+    </div>
+
+    <div class="note">
+      <strong>Note:</strong> Replace <code>YOUR_COMPANY_ID</code> with your actual company ID from the admin dashboard. The user information is optional and can be omitted for anonymous support.
+    </div>
+
+    <h2>Try It Now!</h2>
+    <p>Click the chat button in the bottom-right corner to start a conversation with our AI agent. Try asking questions like:</p>
+    <ul class="feature-list">
+      <li>"What are your business hours?"</li>
+      <li>"How can I track my order?"</li>
+      <li>"I need help with my account"</li>
+      <li>"Do you offer refunds?"</li>
+    </ul>
+
+    <button class="cta" onclick="document.getElementById('customer-ai-button').click()">
+      Open Chat Widget
+    </button>
+
+    <h2>Customization</h2>
+    <p>The widget automatically adapts to your brand's colors and styling based on your configuration in the admin dashboard. You can customize:</p>
+    <ul class="feature-list">
+      <li>Agent name and persona</li>
+      <li>Brand colors and logo</li>
+      <li>Greeting message</li>
+      <li>Knowledge base and FAQs</li>
+      <li>Custom tools and workflows</li>
+    </ul>
+
+    <h2>Support</h2>
+    <p>For more information, visit our <a href="/admin" style="color: #667eea; text-decoration: none; font-weight: 600;">Admin Dashboard</a> or contact our support team.</p>
+  </div>
+
+  <!-- Customer AI Widget Integration -->
+  <script>
+    window.customerAIConfig = {
+      companyId: 'demo-company-id', // Replace with your actual company ID
+      apiUrl: 'http://localhost:8787', // Replace with your Worker URL
+      user: {
+        id: 'demo-user',
+        name: 'Demo User',
+        email: 'demo@example.com'
+      }
+    };
+  </script>
+  <script src="/widget.js" async></script>
+</body>
+</html>
