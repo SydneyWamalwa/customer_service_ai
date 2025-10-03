@@ -1,9 +1,20 @@
+/**
+ * Multi-Tenant Customer Service AI Platform
+ * Main Application Entry Point
+ */
+
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { SupportAgent } from './agent/supportAgent';
-import { CompanyConfigManager } from './config/companyConfigManager';
-import { serveStatic } from 'hono/cloudflare-workers';
-import { ChatSessionDO } from './durable_objects/chatSession';
+import { DatabaseManager } from './database/databaseManager.js';
+import { AuthService } from './security/authService.js';
+import { authenticate, authorize, enforceDataIsolation, optionalAuthenticate, extractCompanyId } from './middleware/authMiddleware.js';
+import { createAuthRoutes } from './routes/authRoutes.js';
+import { createAdminRoutes } from './routes/adminRoutes.js';
+import { createAICustomizationRoutes } from './routes/aiCustomizationRoutes.js';
+import { createAgentRoutes } from './routes/agentRoutes.js';
+import { SupportAgent } from './agent/supportAgent.js';
+import { CompanyConfigManager } from './config/companyConfigManager.js';
+import { ChatSessionDO } from './durable_objects/chatSession.js';
 
 // Export the Durable Object
 export { ChatSessionDO };
@@ -26,24 +37,104 @@ app.get('/health', (c) => {
   return c.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    service: 'Customer Service AI'
+    service: 'Multi-Tenant Customer Service AI Platform',
+    version: '2.0.0'
   });
 });
 
-// Simple middleware to extract company ID
-app.use('/api/*', async (c, next) => {
-  let companyId = c.req.header('X-Company-ID') || c.req.query('companyId') || 'company-1';
-  c.set('companyId', companyId);
+// Initialize services middleware
+app.use('*', async (c, next) => {
+  const db = new DatabaseManager(c.env.DB);
+  const authService = new AuthService(c.env.JWT_SECRET || 'default-secret-change-in-production');
+  
+  c.set('db', db);
+  c.set('authService', authService);
+  
   await next();
 });
 
-// Chat endpoint - PRIMARY FIX
+// ==================== PUBLIC ROUTES ====================
+
+// Authentication routes (public)
+const authRouter = createAuthRoutes();
+app.route('/api/auth', authRouter);
+
+// ==================== PROTECTED ROUTES ====================
+
+// Admin routes (Company Admin only)
+app.use('/api/admin/*', async (c, next) => {
+  const db = c.get('db');
+  const authService = c.get('authService');
+  await authenticate(authService, db)(c, async () => {
+    await authorize('company_admin')(c, async () => {
+      await enforceDataIsolation()(c, next);
+    });
+  });
+});
+
+const adminRouter = createAdminRoutes();
+app.route('/api/admin', adminRouter);
+
+// AI Customization routes (Company Admin only)
+app.use('/api/ai/*', async (c, next) => {
+  const db = c.get('db');
+  const authService = c.get('authService');
+  await authenticate(authService, db)(c, async () => {
+    await authorize('company_admin')(c, async () => {
+      await enforceDataIsolation()(c, next);
+    });
+  });
+});
+
+const aiRouter = createAICustomizationRoutes();
+app.route('/api/ai', aiRouter);
+
+// Agent routes (Company Agent only)
+app.use('/api/agent/*', async (c, next) => {
+  const db = c.get('db');
+  const authService = c.get('authService');
+  await authenticate(authService, db)(c, async () => {
+    await authorize('company_agent')(c, async () => {
+      await enforceDataIsolation()(c, next);
+    });
+  });
+});
+
+const agentRouter = createAgentRoutes();
+app.route('/api/agent', agentRouter);
+
+// ==================== CHAT ENDPOINT ====================
+
+// Chat endpoint (supports both authenticated and anonymous users)
 app.post('/api/chat', async (c) => {
   try {
-    console.log('Chat endpoint hit');
+    const db = c.get('db');
+    const authService = c.get('authService');
     
-    const companyId = c.get('companyId') || 'company-1';
-    console.log('Company ID:', companyId);
+    // Optional authentication
+    await optionalAuthenticate(authService, db)(c, async () => {});
+    
+    const user = c.get('user');
+    let companyId = user?.companyId;
+    
+    // If no authenticated user, get company ID from request
+    if (!companyId) {
+      companyId = c.req.header('X-Company-ID') || c.req.query('companyId');
+    }
+    
+    if (!companyId) {
+      const body = await c.req.json();
+      companyId = body.companyId;
+    }
+    
+    if (!companyId) {
+      return c.json({ 
+        error: 'Company ID is required',
+        message: 'Please provide a company ID to start chatting'
+      }, 400);
+    }
+    
+    console.log('Chat endpoint hit - Company ID:', companyId);
     
     const configManager = new CompanyConfigManager(c.env);
     const companyConfig = await configManager.getCompanyConfig(companyId);
@@ -53,7 +144,7 @@ app.post('/api/chat', async (c) => {
       return c.json({ 
         error: 'Company not found',
         response: "I apologize, but I couldn't load the configuration for your company. Please try again or contact support."
-      }, 200); // Return 200 to prevent errors on frontend
+      }, 200);
     }
     
     const body = await c.req.json();
@@ -71,7 +162,7 @@ app.post('/api/chat', async (c) => {
     const agent = new SupportAgent({
       env: c.env,
       companyConfig,
-      userId: userId || 'anonymous',
+      userId: userId || user?.userId || 'anonymous',
       sessionId: sessionId || crypto.randomUUID()
     });
     
@@ -89,17 +180,29 @@ app.post('/api/chat', async (c) => {
       error: 'Internal server error',
       message: error.message,
       response: "I apologize, but I encountered an error processing your message. Please try again."
-    }, 200); // Return 200 to show error message instead of generic error
+    }, 200);
   }
 });
 
-// Feedback endpoint
+// ==================== FEEDBACK ENDPOINT ====================
+
 app.post('/api/feedback', async (c) => {
   try {
+    const db = c.get('db');
     const body = await c.req.json();
-    const { sessionId, rating, comment } = body;
+    const { companyId, conversationId, customerId, rating, comment } = body;
     
-    console.log('Feedback received:', { sessionId, rating, comment });
+    if (!companyId || !conversationId || !rating) {
+      return c.json({ 
+        error: 'Missing required fields',
+        message: 'companyId, conversationId, and rating are required'
+      }, 400);
+    }
+    
+    const feedbackId = crypto.randomUUID();
+    await db.createFeedback(feedbackId, companyId, conversationId, customerId, rating, comment);
+    
+    console.log('Feedback received:', { companyId, conversationId, rating, comment });
     
     return c.json({ 
       success: true,
@@ -114,36 +217,72 @@ app.post('/api/feedback', async (c) => {
   }
 });
 
-// Admin config endpoint
-app.post('/api/admin/config', async (c) => {
+// ==================== WIDGET CONFIGURATION ENDPOINT ====================
+
+app.get('/api/widget/config/:companyId', async (c) => {
   try {
-    const companyId = c.get('companyId');
-    const body = await c.req.json();
+    const db = c.get('db');
+    const companyId = c.req.param('companyId');
     
-    const configManager = new CompanyConfigManager(c.env);
-    await configManager.updateCompanyConfig(companyId, body);
+    const config = await db.getAgentConfiguration(companyId);
     
-    return c.json({ success: true });
+    if (!config) {
+      return c.json({ 
+        error: 'Configuration not found' 
+      }, 404);
+    }
+    
+    return c.json({
+      success: true,
+      data: {
+        agentName: config.agent_name,
+        brandingName: config.branding_name,
+        brandingLogo: config.branding_logo,
+        brandingPrimaryColor: config.branding_primary_color,
+        greetingMessage: config.greeting_message
+      }
+    });
   } catch (error) {
-    console.error('Config update error:', error);
+    console.error('Get widget config error:', error);
     return c.json({ 
-      error: 'Failed to update config',
+      error: 'Failed to get configuration',
       message: error.message 
     }, 500);
   }
 });
 
-// Serve static files (HTML, CSS, JS)
-app.get('/*', serveStatic({ root: './' }));
+// ==================== STATIC FILES ====================
 
-// Fallback to index.html for SPA routing
-app.get('/', serveStatic({ path: './index.html' }));
+// Serve static files using the ASSETS binding
+app.get('/*', async (c) => {
+  return await c.env.ASSETS.fetch(c.req.raw)
+});
 
-// Export the worker
+// ==================== ERROR HANDLING ====================
+
+app.onError((err, c) => {
+  console.error('Application error:', err);
+  return c.json({
+    error: 'Internal server error',
+    message: err.message
+  }, 500);
+});
+
+// ==================== EXPORT ====================
+
 export default {
   fetch: app.fetch,
   async scheduled(event, env, ctx) {
-    // Handle scheduled tasks if needed
+    // Handle scheduled tasks
     console.log('Scheduled task triggered:', event);
+    
+    // Clean up expired sessions
+    try {
+      const db = new DatabaseManager(env.DB);
+      await db.deleteExpiredSessions();
+      console.log('Expired sessions cleaned up');
+    } catch (error) {
+      console.error('Error cleaning up sessions:', error);
+    }
   }
 };

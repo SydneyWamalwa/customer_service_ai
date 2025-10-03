@@ -1,24 +1,41 @@
-name = "cloudflare-ai-support-agent"
+name = "customer-service-ai-platform"
 main = "src/index.js"
 compatibility_date = "2023-12-01"
 
-[site]
-bucket = "./public"
-
+# AI binding for Cloudflare AI
 [ai]
 binding = "AI"
 
+# Vectorize binding for semantic search
 [[vectorize]]
 binding = "VECTORIZE_INDEX"
 index_name = "support-agent-index"
 
+# D1 Database binding for multi-tenant data
+[[d1_databases]]
+binding = "DB"
+database_name = "customer_service_db"
+database_id = "f46aab06-fae6-4d23-9e0c-dd0cf7dfd2dc"
+
+# Durable Objects binding for chat sessions
 [[durable_objects.bindings]]
 name = "CHAT_SESSIONS"
 class_name = "ChatSessionDO"
+
+# ✅ Static assets binding (new Wrangler v4 way)
+[assets]
+binding = "ASSETS"
+directory = "public"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatSessionDO"]
 
+# Environment variables
 [vars]
 JWT_SECRET = "replace-with-your-secret-in-production"
+ALLOWED_ORIGINS = "*"
+
+# Scheduled tasks (cron jobs)
+[triggers]
+crons = ["0 0 * * *"]
