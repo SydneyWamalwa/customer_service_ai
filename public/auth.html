@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authentication - Customer Support AI</title>
+  <style>
+    /* ... (Your existing CSS is great, no changes needed here) ... */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .auth-container { background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); width: 100%; max-width: 450px; overflow: hidden; }
+    .auth-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; }
+    .auth-header h1 { font-size: 28px; margin-bottom: 8px; }
+    .auth-header p { opacity: 0.9; font-size: 14px; }
+    .auth-tabs { display: flex; border-bottom: 1px solid #e5e7eb; }
+    .tab-btn { flex: 1; padding: 16px; background: none; border: none; font-size: 16px; font-weight: 500; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s; }
+    .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+    .tab-btn:hover { background: #f9fafb; }
+    .auth-content { padding: 30px; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+    .btn-primary { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .alert { padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+    .divider { text-align: center; margin: 20px 0; position: relative; }
+    .divider::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #e5e7eb; }
+    .divider span { background: white; padding: 0 10px; position: relative; color: #6b7280; font-size: 14px; }
+    .info-text { text-align: center; font-size: 13px; color: #6b7280; margin-top: 20px; }
+    .loading { display: inline-block; width: 16px; height: 16px; border: 2px solid #ffffff; border-radius: 50%; border-top-color: transparent; animation: spin 0.8s linear infinite; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-header">
+      <h1>🤖 Customer Support AI</h1>
+      <p>Multi-Tenant Support Platform</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button id="login-tab-btn" class="tab-btn active">Login</button>
+      <button id="signup-tab-btn" class="tab-btn">Sign Up</button>
+    </div>
+
+    <div class="auth-content">
+      <div id="alert-container"></div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="tab-panel active">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="your@email.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+        </div>
+        <div class="form-group">
+          <label for="login-company-id">Company ID</label>
+          <input type="text" id="login-company-id" placeholder="Enter your company ID" required>
+        </div>
+        <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+        <div class="info-text">Don't have an account? Switch to the Sign Up tab.</div>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="tab-panel">
+        <div class="form-group">
+          <label for="signup-company-name">Company Name</label>
+          <input type="text" id="signup-company-name" placeholder="Your Company Name" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-company-email">Company Email</label>
+          <input type="email" id="signup-company-email" placeholder="company@email.com" required>
+        </div>
+        <div class="divider"><span>Admin Account Details</span></div>
+        <div class="form-group">
+          <label for="signup-admin-name">Your Name</label>
+          <input type="text" id="signup-admin-name" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label for="signup-admin-email">Your Email</label>
+          <input type="email" id="signup-admin-email" placeholder="admin@email.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="Minimum 8 characters" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label for="signup-confirm-password">Confirm Password</label>
+          <input type="password" id="signup-confirm-password" placeholder="Re-enter password" required minlength="8" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-primary" id="signup-btn">Create Account</button>
+        <div class="info-text">Already have an account? Switch to the Login tab.</div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // IMPROVEMENT 1: Use a relative URL for API calls. This makes the app portable.
+    const API_BASE_URL = '/api';
+
+    // IMPROVEMENT 2: Use DOMContentLoaded to ensure the script runs after the page is ready.
+    document.addEventListener('DOMContentLoaded', () => {
+      
+      // Element references
+      const loginTabBtn = document.getElementById('login-tab-btn');
+      const signupTabBtn = document.getElementById('signup-tab-btn');
+      const loginForm = document.getElementById('login-form');
+      const signupForm = document.getElementById('signup-form');
+      const alertContainer = document.getElementById('alert-container');
+
+      // Function to switch between Login and Sign Up tabs
+      function switchTab(targetTab) {
+        const isActive = targetTab.classList.contains('active');
+        if (isActive) return; // Do nothing if the tab is already active
+
+        loginTabBtn.classList.toggle('active', targetTab === loginTabBtn);
+        signupTabBtn.classList.toggle('active', targetTab === signupTabBtn);
+        loginForm.classList.toggle('active', targetTab === loginTabBtn);
+        signupForm.classList.toggle('active', targetTab === signupTabBtn);
+        clearAlert();
+      }
+
+      loginTabBtn.addEventListener('click', () => switchTab(loginTabBtn));
+      signupTabBtn.addEventListener('click', () => switchTab(signupTabBtn));
+
+      // IMPROVEMENT 3: Use form 'submit' event listeners instead of 'onclick' on buttons.
+      // This is better for accessibility and allows for native HTML5 validation.
+      loginForm.addEventListener('submit', handleLogin);
+      signupForm.addEventListener('submit', handleSignup);
+
+      function showAlert(message, type = 'error') {
+        alertContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+      }
+
+      function clearAlert() {
+        alertContainer.innerHTML = '';
+      }
+
+      function toggleButtonSpinner(btn, isSubmitting, defaultText) {
+          btn.disabled = isSubmitting;
+          if (isSubmitting) {
+              btn.innerHTML = `<span class="loading"></span>${defaultText.replace(/\./g, '')}...`;
+          } else {
+              btn.innerHTML = defaultText;
+          }
+      }
+
+      async function handleLogin(event) {
+        event.preventDefault(); // Prevent default form submission
+        clearAlert();
+
+        const email = document.getElementById('login-email').value.trim();
+        const password = document.getElementById('login-password').value;
+        const companyId = document.getElementById('login-company-id').value.trim();
+        const btn = document.getElementById('login-btn');
+        
+        toggleButtonSpinner(btn, true, 'Sign In');
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, companyId })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Login failed. Please check your credentials.');
+          }
+          
+          localStorage.setItem('authToken', data.data.token);
+          localStorage.setItem('userData', JSON.stringify(data.data.user));
+          
+          showAlert('Login successful! Redirecting...', 'success');
+          setTimeout(() => window.location.href = '/index.html', 1000);
+
+        } catch (error) {
+          showAlert(error.message);
+        } finally {
+          toggleButtonSpinner(btn, false, 'Sign In');
+        }
+      }
+
+      async function handleSignup(event) {
+        event.preventDefault();
+        clearAlert();
+
+        const companyName = document.getElementById('signup-company-name').value.trim();
+        const companyEmail = document.getElementById('signup-company-email').value.trim();
+        const adminName = document.getElementById('signup-admin-name').value.trim();
+        const adminEmail = document.getElementById('signup-admin-email').value.trim();
+        const password = document.getElementById('signup-password').value;
+        const confirmPassword = document.getElementById('signup-confirm-password').value;
+        const btn = document.getElementById('signup-btn');
+
+        if (password !== confirmPassword) {
+          showAlert('Passwords do not match.');
+          return;
+        }
+
+        toggleButtonSpinner(btn, true, 'Create Account');
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyName, companyEmail, adminName, adminEmail, adminPassword: password })
+          });
+
+          const data = await response.json();
+
+          // IMPROVEMENT 4: More robust error handling based on response status.
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'An unknown error occurred during registration.');
+          }
+
+          localStorage.setItem('authToken', data.data.token);
+          localStorage.setItem('userData', JSON.stringify(data.data.user));
+
+          showAlert('Account created successfully! Redirecting...', 'success');
+          setTimeout(() => window.location.href = '/index.html', 1500);
+
+        } catch (error) {
+          showAlert(error.message);
+        } finally {
+          toggleButtonSpinner(btn, false, 'Create Account');
+        }
+      }
+
+      // Check if already logged in on page load
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        // If a token exists, redirect to the main app immediately.
+        // The main app (app.js) will handle validation and potential logout.
+        window.location.href = '/index.html';
+      }
+    });
+  </script>
+</body>
+</html>

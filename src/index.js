@@ -1,17 +1,19 @@
 /**
- * Multi-Tenant Customer Service AI Platform
- * Main Application Entry Point
+ * Multi-Tenant Customer Service AI Platform - Enhanced Version
+ * Main Application Entry Point with Enhanced Authentication
  */
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { DatabaseManager } from './database/databaseManager.js';
 import { AuthService } from './security/authService.js';
-import { authenticate, authorize, enforceDataIsolation, optionalAuthenticate, extractCompanyId } from './middleware/authMiddleware.js';
+import { authenticate, authorize, enforceDataIsolation, optionalAuthenticate } from './middleware/authMiddleware.js';
 import { createAuthRoutes } from './routes/authRoutes.js';
-import { createAdminRoutes } from './routes/adminRoutes.js';
+import { createAdminRoutes} from './routes/adminRoutes.js';
 import { createAICustomizationRoutes } from './routes/aiCustomizationRoutes.js';
 import { createAgentRoutes } from './routes/agentRoutes.js';
+import { createDashboardRoutes } from './routes/dashboardRoutes.js';
+import { createKnowledgeBaseRoutes } from './routes/knowledgeBaseRoutes.js';
 import { SupportAgent } from './agent/supportAgent.js';
 import { CompanyConfigManager } from './config/companyConfigManager.js';
 import { ChatSessionDO } from './durable_objects/chatSession.js';
@@ -38,7 +40,8 @@ app.get('/health', (c) => {
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     service: 'Multi-Tenant Customer Service AI Platform',
-    version: '2.0.0'
+    version: '3.0.0',
+    features: ['Enhanced Authentication', 'Admin Dashboard', 'RBAC']
   });
 });
 
@@ -61,6 +64,20 @@ app.route('/api/auth', authRouter);
 
 // ==================== PROTECTED ROUTES ====================
 
+// Dashboard routes (Company Admin only)
+app.use('/api/dashboard/*', async (c, next) => {
+  const db = c.get('db');
+  const authService = c.get('authService');
+  await authenticate(authService, db)(c, async () => {
+    await authorize('company_admin')(c, async () => {
+      await enforceDataIsolation()(c, next);
+    });
+  });
+});
+
+const dashboardRouter = createDashboardRoutes();
+app.route('/api/dashboard', dashboardRouter);
+
 // Admin routes (Company Admin only)
 app.use('/api/admin/*', async (c, next) => {
   const db = c.get('db');
@@ -74,6 +91,20 @@ app.use('/api/admin/*', async (c, next) => {
 
 const adminRouter = createAdminRoutes();
 app.route('/api/admin', adminRouter);
+
+// Knowledge Base routes (Company Admin only)
+app.use('/api/knowledge-base/*', async (c, next) => {
+  const db = c.get('db');
+  const authService = c.get('authService');
+  await authenticate(authService, db)(c, async () => {
+    await authorize('company_admin')(c, async () => {
+      await enforceDataIsolation()(c, next);
+    });
+  });
+});
+
+const knowledgeBaseRouter = createKnowledgeBaseRoutes();
+app.route('/api/knowledge-base', knowledgeBaseRouter);
 
 // AI Customization routes (Company Admin only)
 app.use('/api/ai/*', async (c, next) => {
@@ -276,13 +307,22 @@ export default {
     // Handle scheduled tasks
     console.log('Scheduled task triggered:', event);
     
-    // Clean up expired sessions
     try {
       const db = new DatabaseManager(env.DB);
+      
+      // Clean up expired sessions
       await db.deleteExpiredSessions();
       console.log('Expired sessions cleaned up');
+      
+      // Clean up expired refresh tokens
+      await db.deleteExpiredRefreshTokens();
+      console.log('Expired refresh tokens cleaned up');
+      
+      // Clean up expired password reset tokens
+      await db.deleteExpiredPasswordResetTokens();
+      console.log('Expired password reset tokens cleaned up');
     } catch (error) {
-      console.error('Error cleaning up sessions:', error);
+      console.error('Error in scheduled task:', error);
     }
   }
 };

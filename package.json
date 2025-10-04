@@ -13,10 +13,15 @@
     "@cloudflare/ai": "^1.0.0",
     "@cloudflare/kv-asset-handler": "^0.4.0",
     "@cloudflare/workers-types": "^4.20240320.1",
+    "@tanstack/react-query": "^5.90.2",
+    "axios": "^1.12.2",
+    "date-fns": "^4.1.0",
     "hono": "^4.9.9",
     "jose": "^5.10.0",
+    "react-query": "^3.39.3",
     "uuid": "^9.0.1",
-    "vite": "^5.0.10"
+    "vite": "^5.0.10",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "wrangler": "^3.22.1"

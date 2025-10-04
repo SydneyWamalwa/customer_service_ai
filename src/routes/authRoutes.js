@@ -6,7 +6,8 @@
 import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
 
-export function createAuthRoutes(authService, db) {
+// CHANGED: Remove parameters - get services from context instead
+export function createAuthRoutes() {
   const router = new Hono();
 
   /**
@@ -15,6 +16,10 @@ export function createAuthRoutes(authService, db) {
    */
   router.post('/register', async (c) => {
     try {
+      // Get services from context
+      const db = c.get('db');
+      const authService = c.get('authService');
+
       const body = await c.req.json();
       const { companyName, companyEmail, adminName, adminEmail, adminPassword } = body;
 
@@ -80,6 +85,10 @@ export function createAuthRoutes(authService, db) {
    */
   router.post('/login', async (c) => {
     try {
+      // Get services from context
+      const db = c.get('db');
+      const authService = c.get('authService');
+
       const body = await c.req.json();
       const { email, password, companyId } = body;
 
@@ -115,6 +124,10 @@ export function createAuthRoutes(authService, db) {
    */
   router.post('/customer/authenticate', async (c) => {
     try {
+      // Get services from context
+      const db = c.get('db');
+      const authService = c.get('authService');
+
       const body = await c.req.json();
       const { companyId, customerId, email, password } = body;
 
@@ -150,6 +163,10 @@ export function createAuthRoutes(authService, db) {
    */
   router.post('/logout', async (c) => {
     try {
+      // Get services from context
+      const authService = c.get('authService');
+      const db = c.get('db');
+
       const authHeader = c.req.header('Authorization');
       
       if (!authHeader) {
@@ -183,6 +200,10 @@ export function createAuthRoutes(authService, db) {
    */
   router.post('/password/reset', async (c) => {
     try {
+      // Get services from context
+      const db = c.get('db');
+      const authService = c.get('authService');
+
       const user = c.get('user');
       
       if (!user) {
@@ -242,6 +263,9 @@ export function createAuthRoutes(authService, db) {
    */
   router.get('/me', async (c) => {
     try {
+      // Get services from context
+      const db = c.get('db');
+
       const user = c.get('user');
       
       if (!user) {
